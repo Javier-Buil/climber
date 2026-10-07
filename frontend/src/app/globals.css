@@ -1,0 +1,139 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #050505;
+  --color-panel: #0b0b0b;
+  --color-raised: #141414;
+  --color-line: rgb(255 107 0 / 0.22);
+  --color-line-strong: rgb(255 107 0 / 0.5);
+  --color-signal: #ff6b00;
+  --color-signal-soft: #ff9a4d;
+  --color-danger: #ff2e2e;
+  --color-bone: #e9e2d6;
+  --color-dim: #8c8378;
+  --color-faint: #4d4741;
+
+  --font-sans: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-data), ui-monospace, monospace;
+
+  --animate-ping-slow: radar-ping 2.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+  --animate-blink: blink 1.2s steps(2, start) infinite;
+  --animate-sweep: sweep 6s linear infinite;
+  --animate-fade-in: fade-in 0.3s ease-out;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateX(12px);
+    }
+  }
+
+  @keyframes radar-ping {
+    75%,
+    100% {
+      transform: scale(3);
+      opacity: 0;
+    }
+  }
+  @keyframes blink {
+    to {
+      visibility: hidden;
+    }
+  }
+  @keyframes sweep {
+    from {
+      transform: translateY(-100%);
+    }
+    to {
+      transform: translateY(100vh);
+    }
+  }
+}
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    position: relative;
+    background-color: var(--color-ink);
+    color: var(--color-bone);
+    font-family: var(--font-mono);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background: var(--color-signal);
+    color: var(--color-ink);
+  }
+}
+
+@layer components {
+  /* Separate stacking context so Base UI portals always sit on top. */
+  .app-root {
+    isolation: isolate;
+  }
+
+  /* Square tactical grid used as a backdrop for surfaces. */
+  .grid-backdrop {
+    background-color: var(--color-ink);
+    background-image:
+      linear-gradient(rgb(255 107 0 / 0.07) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(255 107 0 / 0.07) 1px, transparent 1px),
+      linear-gradient(rgb(255 107 0 / 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(255 107 0 / 0.03) 1px, transparent 1px);
+    background-size:
+      80px 80px,
+      80px 80px,
+      16px 16px,
+      16px 16px;
+  }
+
+  /* CRT scanlines and vignette layered over the whole UI. */
+  .scanlines {
+    pointer-events: none;
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background:
+      repeating-linear-gradient(to bottom, rgb(0 0 0 / 0.18) 0 1px, transparent 1px 3px),
+      radial-gradient(ellipse at center, transparent 55%, rgb(0 0 0 / 0.55) 100%);
+  }
+
+  /* Panels get bracketed corners, like a targeting reticle. */
+  .bracketed {
+    position: relative;
+  }
+  .bracketed::before,
+  .bracketed::after {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border-color: var(--color-signal);
+    border-style: solid;
+  }
+  .bracketed::before {
+    top: -1px;
+    left: -1px;
+    border-width: 2px 0 0 2px;
+  }
+  .bracketed::after {
+    right: -1px;
+    bottom: -1px;
+    border-width: 0 2px 2px 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
