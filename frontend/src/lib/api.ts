@@ -88,7 +88,7 @@ export class ApiError extends Error {
 // Requests go through the Next.js rewrite in next.config.ts, so the browser
 // only ever talks to its own origin.
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(`/api/v1${path}`, {
     ...init,
     headers: { "Content-Type": "application/json", ...init?.headers },
   });

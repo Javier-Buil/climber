@@ -34,14 +34,38 @@ Interactive API docs are at http://localhost:8000/docs.
 
 ## Backend
 
-| Method | Path                          | Description                                  |
-| ------ | ----------------------------- | -------------------------------------------- |
-| GET    | `/api/spots`                  | All spots with coordinates and route counts  |
-| GET    | `/api/spots/{id}`             | One spot and a summary of its routes         |
-| GET    | `/api/routes/{id}`            | Route with ordered holds and beta notes      |
-| POST   | `/api/routes/{id}/beta`       | Add a beta note, optionally pinned to a hold |
+```
+backend/
+├── app/
+│   ├── main.py              App factory: CORS, lifespan (create + seed DB), routers
+│   ├── core/config.py       Settings (pydantic-settings, env vars or backend/.env)
+│   ├── api/
+│   │   ├── deps.py          Shared dependencies (DB session)
+│   │   └── v1/
+│   │       ├── router.py    Mounts every v1 endpoint under /api/v1
+│   │       └── endpoints/   spots.py, routes.py
+│   ├── models/              SQLModel tables: spot, route, hold, beta_note, enums
+│   ├── schemas/             Request/response bodies
+│   ├── services/            Query and business logic, no HTTP details
+│   └── db/
+│       ├── session.py       Engine and session dependency
+│       ├── seed.py          Procedural hold generation and seeding
+│       └── seed_data.py     Sample spots, routes and beta text
+└── tests/                   Mirrors app/ (tests/api/v1/...)
+```
 
-Data model (`backend/app/models.py`):
+| Method | Path                             | Description                                  |
+| ------ | -------------------------------- | -------------------------------------------- |
+| GET    | `/health`                        | Liveness check (unversioned)                 |
+| GET    | `/api/v1/spots`                  | All spots with coordinates and route counts  |
+| GET    | `/api/v1/spots/{id}`             | One spot and a summary of its routes         |
+| GET    | `/api/v1/routes/{id}`            | Route with ordered holds and beta notes      |
+| POST   | `/api/v1/routes/{id}/beta`       | Add a beta note, optionally pinned to a hold |
+
+A future breaking change goes in `app/api/v2/` with its own router, mounted
+next to v1 in `main.py`.
+
+Data model (`backend/app/models/`):
 
 - **Spot**: name, country, region, latitude/longitude, rock type, elevation.
 - **Route**: grade, style (sport/trad/boulder), length, wall angle
@@ -51,15 +75,22 @@ Data model (`backend/app/models.py`):
   usage (hand/foot), size, pull direction, crux flag and an optional note.
 - **BetaNote**: author, text, optional hold.
 
-Config via env vars: `DATABASE_URL` (default `sqlite:///backend/climber.db`)
-and `CORS_ORIGINS` (default `http://localhost:3000`).
+Settings live in `app/core/config.py` (pydantic-settings). Each field can be
+set as an environment variable or in `backend/.env`; see `.env.example`.
 
-Run the tests with `uv run pytest`.
+| Variable          | Default                      |
+| ----------------- | ---------------------------- |
+| `DATABASE_URL`    | `sqlite:///backend/climber.db` |
+| `CORS_ORIGINS`    | `http://localhost:3000` (comma separated) |
+| `SEED_ON_STARTUP` | `true`                       |
+| `API_V1_PREFIX`   | `/api/v1`                    |
+
+Run the tests with `uv run pytest`. Reset and reseed the database with
+`uv run python -m app.db.seed`.
 
 > **Sample data.** Spot coordinates are real. Route names, grades and first
 > ascents are given for flavour, but every hold layout is procedurally
-> generated (`backend/app/seed.py`). It is not real beta. Delete `climber.db`
-> to reseed.
+> generated (`backend/app/db/seed.py`). It is not real beta.
 
 ## Frontend
 
