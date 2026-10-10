@@ -15,12 +15,12 @@ export function Panel({ title, code, actions, className, bodyClassName, children
   return (
     <section
       className={cn(
-        "bracketed flex min-h-0 flex-col border border-line bg-panel/85 backdrop-blur-sm",
+        "bracketed flex min-h-0 flex-col border border-line bg-ink/75 shadow-[0_0_40px_-12px_rgb(255_107_0/0.25)] backdrop-blur-md",
         className,
       )}
     >
       {title !== undefined && (
-        <header className="flex items-center gap-2 border-b border-line px-3 py-2">
+        <header className="flex items-center gap-2 border-b border-line bg-gradient-to-r from-signal/[0.09] to-transparent px-3 py-2">
           <span className="size-1.5 bg-signal" aria-hidden />
           <h2 className="font-sans text-xs font-semibold tracking-[0.2em] text-signal uppercase">{title}</h2>
           {code && <span className="text-[10px] tracking-widest text-faint">{code}</span>}

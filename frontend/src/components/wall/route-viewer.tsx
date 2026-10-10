@@ -1,23 +1,20 @@
 "use client";
 
-import { Layers, RotateCcw, ScanLine } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, type BetaNote, type RouteDetail } from "@/lib/api";
-import { HOLD_COLORS } from "@/lib/holds";
 import { useApi } from "@/lib/use-api";
 import { useStudied } from "@/lib/use-studied";
 import { TopBar } from "../hud/top-bar";
 import { ApiOffline } from "../map/world-explorer";
-import { Button } from "../ui/button";
 import { ReadinessMeter } from "../ui/meter";
 import { Badge, Panel, Stat } from "../ui/panel";
-import { Switch } from "../ui/switch";
 import { Tab, TabList, TabPanel, Tabs } from "../ui/tabs";
-import { Hint } from "../ui/tooltip";
 import { BetaFeed } from "./beta-feed";
 import { HoldDossier } from "./hold-dossier";
+import { RouteAltimeter } from "./route-altimeter";
+import { WallScene, type SceneLayers } from "./scene/wall-scene";
+import { SceneToolbar } from "./scene-toolbar";
 import { SequenceList } from "./sequence-list";
-import { WallScene, type SceneLayers } from "./wall-scene";
 
 export function RouteViewer({ routeId }: { routeId: number }) {
   const { data: route, error, mutate } = useApi(`route:${routeId}`, () => api.route(routeId));
@@ -57,8 +54,15 @@ function RouteWorkspace({ route, onNoteAdded }: { route: RouteDetail; onNoteAdde
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [hoveredId, setHoveredId] = useState<number | null>(null);
   const [viewNonce, setViewNonce] = useState(0);
-  const [layers, setLayers] = useState<SceneLayers>({ sequence: true, feet: true, contours: true, labels: false });
+  const [layers, setLayers] = useState<SceneLayers>({
+    sequence: true,
+    feet: true,
+    contours: true,
+    labels: false,
+    scan: true,
+  });
   const { studied, toggle, reset } = useStudied(route.id);
+  const telemetry = useRef<HTMLSpanElement>(null);
 
   const holds = route.holds;
   const selectedIndex = holds.findIndex((h) => h.id === selectedId);
@@ -97,7 +101,6 @@ function RouteWorkspace({ route, onNoteAdded }: { route: RouteDetail; onNoteAdde
     return () => window.removeEventListener("keydown", onKey);
   }, [step, toggle, selectedId]);
 
-  const setLayer = (key: keyof SceneLayers) => (value: boolean) => setLayers((l) => ({ ...l, [key]: value }));
   const angleLabel =
     route.wall_angle_deg > 0 ? `+${route.wall_angle_deg}°` : route.wall_angle_deg < 0 ? `${route.wall_angle_deg}°` : "0°";
 
@@ -112,10 +115,12 @@ function RouteWorkspace({ route, onNoteAdded }: { route: RouteDetail; onNoteAdde
           studied={studied}
           layers={layers}
           viewNonce={viewNonce}
+          telemetryRef={telemetry}
           onSelect={setSelectedId}
           onHover={setHoveredId}
         />
       </div>
+      <ViewportFrame telemetryRef={telemetry} routeName={route.name} />
 
       {/* Left: briefing, sequence and beta */}
       <Panel
@@ -145,7 +150,15 @@ function RouteWorkspace({ route, onNoteAdded }: { route: RouteDetail; onNoteAdde
           <p className="text-[11px] leading-relaxed text-dim">{route.description}</p>
           <div className="grid grid-cols-3 gap-2 border border-line/60 bg-ink/60 p-2.5">
             <Stat label="Length" value={`${route.length_m} m`} />
-            <Stat label="Angle" value={angleLabel} />
+            <Stat
+              label="Angle"
+              value={
+                <span className="flex items-center gap-1.5">
+                  <AngleGlyph degrees={route.wall_angle_deg} />
+                  {angleLabel}
+                </span>
+              }
+            />
             <Stat label="Holds" value={holds.length} />
           </div>
           {route.first_ascent && (
@@ -200,45 +213,66 @@ function RouteWorkspace({ route, onNoteAdded }: { route: RouteDetail; onNoteAdde
         />
       )}
 
-      {/* Bottom: layer controls and legend */}
-      <div className="absolute bottom-3 left-[21.5rem] flex items-end gap-3">
-        <Panel title={<span className="flex items-center gap-1.5"><Layers className="size-3" />Layers</span>} className="w-52" bodyClassName="space-y-2 p-3">
-          <Switch label="Sequence path" checked={layers.sequence} onCheckedChange={setLayer("sequence")} />
-          <Switch label="Footholds" checked={layers.feet} onCheckedChange={setLayer("feet")} />
-          <Switch label="Topo contours" checked={layers.contours} onCheckedChange={setLayer("contours")} />
-          <Switch label="Hold numbers" checked={layers.labels} onCheckedChange={setLayer("labels")} />
-        </Panel>
-        <div className="flex flex-col gap-2">
-          <Hint label="Frame whole wall" side="right">
-            <Button size="icon" className="bg-ink" onClick={() => setViewNonce((n) => n + 1)} aria-label="Frame whole wall">
-              <ScanLine className="size-4" />
-            </Button>
-          </Hint>
-          <Hint label="Start of route" side="right">
-            <Button size="icon" className="bg-ink" onClick={() => setSelectedId(holds[0]?.id ?? null)} aria-label="Go to start">
-              <RotateCcw className="size-4" />
-            </Button>
-          </Hint>
-        </div>
-        <div className="hidden gap-3 border border-line bg-panel/85 px-3 py-2 text-[10px] tracking-[0.15em] text-dim uppercase xl:flex">
-          <LegendDot color={HOLD_COLORS.hand} label="Hand" />
-          <LegendDot color={HOLD_COLORS.foot} label="Foot" />
-          <LegendDot color={HOLD_COLORS.crux} label="Crux" />
-          <LegendDot color="#9dff7a" label="Studied" ring />
-        </div>
+      {/* Right: altimeter */}
+      <div className="absolute top-3 right-3 bottom-3">
+        <RouteAltimeter
+          holds={holds}
+          length={route.length_m}
+          selectedId={selectedId}
+          hoveredId={hoveredId}
+          studied={studied}
+          onSelect={setSelectedId}
+          onHover={setHoveredId}
+        />
+      </div>
+
+      {/* Bottom: layer toolbar, centred in the free canvas area */}
+      <div className="absolute bottom-4 left-[calc(21.5rem+(100%-21.5rem-6rem)/2)] -translate-x-1/2">
+        <SceneToolbar
+          layers={layers}
+          onLayersChange={setLayers}
+          onFrameWall={() => setViewNonce((n) => n + 1)}
+          onGoToStart={() => setSelectedId(holds[0]?.id ?? null)}
+        />
       </div>
     </>
   );
 }
 
-function LegendDot({ color, label, ring }: { color: string; label: string; ring?: boolean }) {
+/** Corner brackets, centre mark and camera telemetry drawn over the 3D view. */
+function ViewportFrame({ telemetryRef, routeName }: { telemetryRef: React.RefObject<HTMLSpanElement | null>; routeName: string }) {
+  const corner = "absolute size-5 border-signal/60";
   return (
-    <span className="flex items-center gap-1.5">
-      <span
-        className="size-2.5 rounded-full"
-        style={ring ? { boxShadow: `inset 0 0 0 2px ${color}` } : { backgroundColor: color, boxShadow: `0 0 6px ${color}` }}
-      />
-      {label}
-    </span>
+    <div className="pointer-events-none absolute inset-y-3 right-[6.25rem] left-[21.5rem]" aria-hidden>
+      <span className={`${corner} top-0 left-0 border-t border-l`} />
+      <span className={`${corner} top-0 right-0 border-t border-r`} />
+      <span className={`${corner} bottom-0 left-0 border-b border-l`} />
+      <span className={`${corner} right-0 bottom-0 border-r border-b`} />
+      <div className="absolute top-2 left-7 flex items-center gap-2 text-[9px] tracking-[0.22em] text-signal/80 uppercase">
+        <span className="size-1.5 animate-blink rounded-full bg-danger" />
+        Rec · Wall survey · {routeName}
+      </div>
+      <span ref={telemetryRef} className="absolute top-2 right-7 text-[9px] tracking-[0.18em] text-dim tabular-nums" />
+      <div className="absolute top-1/2 left-1/2 size-6 -translate-x-1/2 -translate-y-1/2 opacity-40">
+        <span className="absolute top-1/2 left-0 h-px w-2 bg-signal" />
+        <span className="absolute top-1/2 right-0 h-px w-2 bg-signal" />
+        <span className="absolute top-0 left-1/2 h-2 w-px bg-signal" />
+        <span className="absolute bottom-0 left-1/2 h-2 w-px bg-signal" />
+      </div>
+    </div>
+  );
+}
+
+/** Tiny side-view of the wall: leaning right means overhanging. */
+function AngleGlyph({ degrees }: { degrees: number }) {
+  const rad = (degrees * Math.PI) / 180;
+  const x = 4 + Math.sin(rad) * 10;
+  const y = 14 - Math.cos(rad) * 10;
+  return (
+    <svg viewBox="0 0 18 16" className="h-4 w-4.5" aria-hidden>
+      <path d="M1 14.5H17" stroke="currentColor" strokeOpacity={0.35} />
+      <path d="M4 4V14" stroke="currentColor" strokeOpacity={0.3} strokeDasharray="1.5 1.5" />
+      <path d={`M4 14L${x.toFixed(1)} ${y.toFixed(1)}`} stroke="var(--color-signal)" strokeWidth={1.6} />
+    </svg>
   );
 }

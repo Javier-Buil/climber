@@ -100,7 +100,7 @@ function SpotIndex({
     <Panel
       title="Sectors"
       code={`IDX-${String(spots.length).padStart(3, "0")}`}
-      className="absolute top-9 left-12 hidden max-h-[calc(100%-6rem)] w-72 md:flex"
+      className="absolute top-12 left-14 hidden max-h-[calc(100%-11rem)] w-72 md:flex"
       bodyClassName="flex flex-col"
     >
       <div className="relative border-b border-line p-2">
@@ -161,7 +161,7 @@ function SpotDossier({ spotId, onClose }: { spotId: number; onClose: () => void 
     <Panel
       title="Sector dossier"
       code={spot ? `#${spot.slug.toUpperCase()}` : undefined}
-      className="absolute top-9 right-3 bottom-3 animate-fade-in"
+      className="absolute top-12 right-6 bottom-6 animate-fade-in"
       bodyClassName="flex flex-col"
       actions={
         <Button size="icon" variant="ghost" onClick={onClose} aria-label="Close dossier" className="size-6">

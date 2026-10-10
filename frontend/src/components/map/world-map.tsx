@@ -47,9 +47,13 @@ export function WorldMap({ spots, selectedId, onSelect, rightInset = 0 }: WorldM
   const svgRef = useRef<SVGSVGElement>(null);
   const zoomRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const readoutRef = useRef<HTMLSpanElement>(null);
+  const crosshairRef = useRef<HTMLDivElement>(null);
+  const lonChipRef = useRef<HTMLSpanElement>(null);
+  const latChipRef = useRef<HTMLSpanElement>(null);
   const [transform, setTransform] = useState<ZoomTransform>(zoomIdentity);
   const [world, setWorld] = useState<WorldTopology | null>(null);
   const [hoveredId, setHoveredId] = useState<number | null>(null);
+  const [coastDrawn, setCoastDrawn] = useState(false);
 
   // The atlas is ~750 KB, so it is split out of the main bundle.
   useEffect(() => {
@@ -119,14 +123,37 @@ export function WorldMap({ spots, selectedId, onSelect, rightInset = 0 }: WorldM
     }
   };
 
+  // Cursor tracking writes straight to the DOM so the map never re-renders on mouse move.
   const onPointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
-    const [x, y] = transform.invert([event.clientX - rect.left, event.clientY - rect.top]);
-    const coords = projection.invert?.([x, y]);
-    if (readoutRef.current && coords) {
-      readoutRef.current.textContent = `${formatLat(coords[1])}  ${formatLon(coords[0])}`;
+    const sx = event.clientX - rect.left;
+    const sy = event.clientY - rect.top;
+    const coords = projection.invert?.(transform.invert([sx, sy]));
+    if (!coords) return;
+    if (readoutRef.current) readoutRef.current.textContent = `${formatLat(coords[1])}  ${formatLon(coords[0])}`;
+    if (crosshairRef.current) {
+      crosshairRef.current.style.opacity = "1";
+      crosshairRef.current.style.setProperty("--cx", `${sx}px`);
+      crosshairRef.current.style.setProperty("--cy", `${sy}px`);
     }
+    if (lonChipRef.current) lonChipRef.current.textContent = formatLon(coords[0]);
+    if (latChipRef.current) latChipRef.current.textContent = formatLat(coords[1]);
   };
+  const onPointerLeave = () => {
+    if (crosshairRef.current) crosshairRef.current.style.opacity = "0";
+  };
+
+  const scaleBar = useMemo(() => {
+    if (!width) return null;
+    // Equirectangular: x = scale * longitude (radians), so km/px depends on latitude.
+    const centre = projection.invert?.(transform.invert([width / 2, height / 2]));
+    const cosLat = Math.cos(((centre?.[1] ?? 0) * Math.PI) / 180);
+    const kmPerPx = (6371 * cosLat) / (projection.scale() * transform.k);
+    const target = kmPerPx * 110;
+    const magnitude = 10 ** Math.floor(Math.log10(target));
+    const km = [5, 2, 1].map((m) => m * magnitude).find((v) => v <= target) ?? magnitude;
+    return { km, px: km / kmPerPx };
+  }, [projection, transform, width, height]);
 
   // The static layers only re-render when the data or viewport changes.
   const staticLayers = useMemo(
@@ -134,12 +161,34 @@ export function WorldMap({ spots, selectedId, onSelect, rightInset = 0 }: WorldM
       layers && (
         <>
           <path d={layers.graticule} fill="none" stroke="rgb(255 107 0 / 0.12)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-          <path d={layers.land} fill="url(#land-grid)" stroke="none" />
-          <path d={layers.borders} fill="none" stroke="rgb(255 107 0 / 0.28)" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
-          <path d={layers.land} fill="none" stroke="#ff6b00" strokeWidth={1.1} vectorEffect="non-scaling-stroke" />
+          <path d={layers.land} fill="url(#land-grid)" stroke="none" className="animate-land-in" />
+          <path
+            d={layers.borders}
+            fill="none"
+            stroke="rgb(255 107 0 / 0.22)"
+            strokeWidth={0.6}
+            vectorEffect="non-scaling-stroke"
+            className="animate-land-in"
+          />
+          {coastDrawn ? (
+            <path d={layers.land} fill="none" stroke="#ff6b00" strokeWidth={1.1} vectorEffect="non-scaling-stroke" />
+          ) : (
+            // Coastline traced in on load. Dashes and non-scaling strokes don't mix,
+            // so the animated version is swapped out once it finishes.
+            <path
+              d={layers.land}
+              fill="none"
+              stroke="#ff6b00"
+              strokeWidth={1.1}
+              pathLength={1}
+              strokeDasharray={1}
+              className="animate-draw"
+              onAnimationEnd={() => setCoastDrawn(true)}
+            />
+          )}
         </>
       ),
-    [layers],
+    [layers, coastDrawn],
   );
 
   const ticks = useMemo(() => {
@@ -168,6 +217,7 @@ export function WorldMap({ spots, selectedId, onSelect, rightInset = 0 }: WorldM
         height={height}
         className="absolute inset-0 cursor-crosshair touch-none select-none"
         onPointerMove={onPointerMove}
+        onPointerLeave={onPointerLeave}
         role="img"
         aria-label="World map of climbing spots"
       >
@@ -180,9 +230,9 @@ export function WorldMap({ spots, selectedId, onSelect, rightInset = 0 }: WorldM
             patternUnits="userSpaceOnUse"
             patternTransform={`scale(${1 / transform.k})`}
           >
-            <rect width={7} height={7} fill="rgb(255 107 0 / 0.06)" />
-            <path d="M7 0H0V7" fill="none" stroke="rgb(255 107 0 / 0.45)" strokeWidth={0.6} />
-            <rect x={0} y={0} width={1.2} height={1.2} fill="rgb(255 154 77 / 0.9)" />
+            <rect width={7} height={7} fill="rgb(255 107 0 / 0.05)" />
+            <path d="M7 0H0V7" fill="none" stroke="rgb(255 107 0 / 0.32)" strokeWidth={0.5} />
+            <rect x={-0.6} y={-0.6} width={1.2} height={1.2} fill="rgb(255 154 77 / 0.85)" />
           </pattern>
           <radialGradient id="marker-glow">
             <stop offset="0%" stopColor="#ff6b00" stopOpacity={0.55} />
@@ -212,47 +262,88 @@ export function WorldMap({ spots, selectedId, onSelect, rightInset = 0 }: WorldM
               onPointerEnter={() => setHoveredId(spot.id)}
               onPointerLeave={() => setHoveredId(null)}
             >
-              <circle r={selected ? 34 : 22} fill="url(#marker-glow)" />
-              <circle r={6} fill="none" stroke="#ff6b00" strokeWidth={1} className="origin-center animate-ping-slow [transform-box:fill-box]" />
+              <circle r={selected ? 30 : 18} fill="url(#marker-glow)" opacity={selected || hovered ? 1 : 0.6} />
+              <circle
+                r={5}
+                fill="none"
+                stroke="#ff6b00"
+                strokeWidth={1}
+                className="origin-center animate-ping-slow [transform-box:fill-box]"
+              />
+              {selected && (
+                <circle
+                  r={15}
+                  fill="none"
+                  stroke="#ff6b00"
+                  strokeWidth={1}
+                  strokeDasharray="3 5"
+                  className="origin-center animate-[spin_8s_linear_infinite] [transform-box:fill-box]"
+                />
+              )}
               <rect
-                className="reticle"
-                x={-5}
-                y={-5}
-                width={10}
-                height={10}
+                className="reticle transition-[fill,stroke]"
+                x={-4}
+                y={-4}
+                width={8}
+                height={8}
                 transform="rotate(45)"
                 fill={selected ? "#ff6b00" : "#050505"}
                 stroke={selected || hovered ? "#ffffff" : "#ff6b00"}
-                strokeWidth={1.5}
+                strokeWidth={1.4}
               />
               {(selected || hovered) && (
-                <g stroke="#ff6b00" strokeWidth={1}>
-                  <path d="M-18 0h-8M18 0h8M0 -18v-8M0 18v8" />
-                  <rect x={-14} y={-14} width={28} height={28} fill="none" strokeDasharray="4 4" />
-                </g>
+                <path d="M-22 0h-7M22 0h7M0 -22v-7M0 22v7" stroke="#ff6b00" strokeWidth={1} />
               )}
               {showLabel && (
-                <g transform="translate(14,-10)" className="pointer-events-none">
-                  <rect
-                    x={-2}
-                    y={-11}
-                    width={spot.name.length * 7.6 + 46}
-                    height={26}
-                    fill="rgb(5 5 5 / 0.85)"
-                    stroke={selected ? "#ff6b00" : "rgb(255 107 0 / 0.35)"}
-                  />
-                  <text x={4} y={1} className="fill-bone font-sans text-[11px] font-semibold tracking-[0.15em] uppercase">
-                    {spot.name}
-                  </text>
-                  <text x={4} y={11} className="fill-signal font-mono text-[8px] tracking-[0.15em]">
-                    {spot.route_count} RTE · {spot.latitude.toFixed(2)},{spot.longitude.toFixed(2)}
-                  </text>
+                <g className="pointer-events-none">
+                  <path d="M6 -6 16 -16H24" fill="none" stroke={selected ? "#ff6b00" : "rgb(255 107 0 / 0.5)"} strokeWidth={1} />
+                  <g transform="translate(24,-28)">
+                    <rect
+                      width={Math.max(spot.name.length * 8.4, (spot.rock_type.length + 8) * 6) + 18}
+                      height={24}
+                      fill="rgb(5 5 5 / 0.82)"
+                    />
+                    <rect width={2} height={24} fill={selected ? "#ff6b00" : "rgb(255 107 0 / 0.6)"} />
+                    <text x={9} y={11} className="fill-bone font-sans text-[11px] font-semibold tracking-[0.15em] uppercase">
+                      {spot.name}
+                    </text>
+                    <text x={9} y={20} className="fill-signal/80 font-mono text-[7.5px] tracking-[0.18em]">
+                      {spot.route_count} RTE · {spot.rock_type.toUpperCase()}
+                    </text>
+                  </g>
                 </g>
               )}
             </g>
           );
         })}
       </svg>
+
+      {/* Targeting crosshair following the cursor */}
+      <div
+        ref={crosshairRef}
+        className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-200"
+        aria-hidden
+      >
+        <div className="absolute inset-y-0 left-(--cx) w-px bg-[linear-gradient(to_bottom,rgb(255_107_0/0.45)_50%,transparent_50%)] bg-size-[1px_6px]" />
+        <div className="absolute inset-x-0 top-(--cy) h-px bg-[linear-gradient(to_right,rgb(255_107_0/0.45)_50%,transparent_50%)] bg-size-[6px_1px]" />
+        <div className="absolute top-(--cy) left-(--cx) size-7 -translate-x-1/2 -translate-y-1/2 border border-signal/70" />
+        <span
+          ref={lonChipRef}
+          className="absolute top-0 left-(--cx) z-10 -translate-x-1/2 bg-signal px-1 text-[9px] leading-5 text-ink tabular-nums"
+        />
+        <span
+          ref={latChipRef}
+          className="absolute top-(--cy) left-0 z-10 -translate-y-1/2 bg-signal px-1 text-[8px] leading-4 text-ink tabular-nums"
+        />
+      </div>
+
+      {/* Viewport frame */}
+      <div className="pointer-events-none absolute inset-x-11 top-8 bottom-3" aria-hidden>
+        <span className="absolute top-0 left-0 size-4 border-t border-l border-signal/50" />
+        <span className="absolute top-0 right-0 size-4 border-t border-r border-signal/50" />
+        <span className="absolute bottom-0 left-0 size-4 border-b border-l border-signal/50" />
+        <span className="absolute right-0 bottom-0 size-4 border-r border-b border-signal/50" />
+      </div>
 
       {/* Edge rulers */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-5 border-b border-line bg-ink/70 text-[9px] text-signal/80">
@@ -280,13 +371,22 @@ export function WorldMap({ spots, selectedId, onSelect, rightInset = 0 }: WorldM
       )}
 
       {/* Status readouts */}
-      <div className="pointer-events-none absolute bottom-3 left-11 flex flex-col gap-1 text-[10px] tracking-[0.2em] text-dim uppercase">
+      <div className="pointer-events-none absolute bottom-6 left-14 z-10 flex flex-col gap-1.5 border border-line bg-ink/80 px-3 py-2 text-[10px] backdrop-blur-md tracking-[0.2em] text-dim uppercase">
         <span>
           Cursor <span ref={readoutRef} className="text-signal tabular-nums" />
         </span>
         <span>
           Zoom <span className="text-signal tabular-nums">{transform.k.toFixed(1)}×</span> · Proj EQR · Datum WGS84
         </span>
+        {scaleBar && (
+          <span className="flex items-center gap-2">
+            <span
+              className="h-1.5 border-x border-b border-signal/80 bg-[linear-gradient(90deg,var(--color-signal)_50%,transparent_50%)] bg-size-[50%_2px] bg-bottom bg-no-repeat"
+              style={{ width: scaleBar.px }}
+            />
+            <span className="text-signal tabular-nums">{scaleBar.km.toLocaleString("en")} km</span>
+          </span>
+        )}
       </div>
 
       <div

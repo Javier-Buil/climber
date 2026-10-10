@@ -96,15 +96,22 @@ Run the tests with `uv run pytest`. Reset and reseed the database with
 
 - **World map** (`src/components/map`): equirectangular projection with
   `d3-geo`, Natural Earth land from `world-atlas`, gridded land fill,
-  graticule rulers, pan/zoom with `d3-zoom`, and fly-to on selection. The
+  coastlines traced in on load, graticule rulers, a targeting crosshair with
+  live coordinates, a scale bar, pan/zoom with `d3-zoom`, and fly-to on
+  selection. The
   selected spot lives in the URL (`/?spot=3`), so the dossier survives
   navigation.
-- **Route viewer** (`src/components/wall`): the rock is a mesh displaced with
-  seeded fractal noise (`src/lib/wall.ts`) and rendered by a custom shader that
-  draws a 1 m tactical grid and topographic contour lines. Holds are shaped
-  by kind, coloured by role (hand, foot, crux), rotated to their pull
-  direction, and scale up with camera distance so they stay visible on long
-  routes. Click a hold, or use the sequence list, to fly the camera to it.
+- **Route viewer** (`src/components/wall`, scene in `wall/scene/`): the rock
+  is a mesh displaced with seeded fractal noise (`src/lib/wall.ts`) and drawn
+  by a custom shader: dark rock with a quiet 1 m survey grid, topographic
+  contours, dashed corridor rails, 5 m height bands and an animated survey
+  sweep that travels up the wall. Holds are faceted, edge-outlined shapes by
+  kind, coloured by role (hand, foot, crux) and rotated to their pull
+  direction; they grow with camera distance so they stay visible on long
+  routes. Bloom, vignette and film grain come from `@react-three/postprocessing`.
+  Selecting a hold (in the scene, the sequence list or the altimeter strip)
+  flies the camera there and locks a targeting reticle onto it. The HUD shows
+  live camera azimuth, elevation and range, and a toolbar toggles layers.
 - **UI kit** (`src/components/ui`): headless
   [Base UI](https://base-ui.com) primitives (Tabs, Switch, Checkbox, Tooltip,
   ScrollArea, Progress, Field, Input) styled with Tailwind in the orange/black
