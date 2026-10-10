@@ -25,7 +25,7 @@ export function HoldDossier({ hold, index, total, studied, notes, onToggleStudie
     <Panel
       title="Hold intel"
       code={`H-${String(hold.id).padStart(5, "0")}`}
-      className="absolute top-3 right-3 max-h-[calc(100%-1.5rem)] w-80 animate-fade-in"
+      className="absolute top-3 right-[6.25rem] max-h-[calc(100%-5.5rem)] w-80 animate-fade-in"
       bodyClassName="flex flex-col"
       actions={
         <Button size="icon" variant="ghost" className="size-6" onClick={onClose} aria-label="Close hold intel">
